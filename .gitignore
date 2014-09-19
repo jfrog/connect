@@ -1,3 +1,9 @@
+.idea/
+atlassian-ide-plugin.xml
+*.iml
+*.iws
+*.ipr
+
 *.class
 
 # Mobile Tools for Java (J2ME)
