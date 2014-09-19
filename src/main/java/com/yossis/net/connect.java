@@ -40,7 +40,7 @@ public class connect {
         String destUrl = args[0];
         int i = 1;
         while (i < args.length) {
-            String arg = args[++i];
+            String arg = args[i++];
             boolean found = false;
             for (Options opts : Options.values()) {
                 if (opts.flagName.equals(arg)) {
@@ -48,7 +48,7 @@ public class connect {
                         if (i >= args.length) {
                             usageError();
                         }
-                        String val = args[++i];
+                        String val = args[i++];
                         options.put(opts, val);
                     } else {
                         options.put(opts, "on");
