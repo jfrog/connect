@@ -15,7 +15,7 @@ public class connect {
     enum Options { PROXY_HOST, PROXY_PORT, PROXY_USERNAME,
         PROXY_PASSWORD, REMOTE_USERNAME,
         REMOTE_PASSWORD, USE_HTTP_CLIENT(true),
-        CONNECT_TIMEOUT;
+        CONNECT_TIMEOUT, TRUSTSTORE, KEYSTORE, TRUSTSTORE_PASSWORD, KEYSTORE_PASSWORD;
 
         boolean hasValue;
         String flagName;
@@ -82,6 +82,15 @@ public class connect {
                             configurator.authentication(options.get(Options.REMOTE_USERNAME), options.get(Options.REMOTE_PASSWORD));
                             credsSet = true;
                         }
+                        break;
+                    case KEYSTORE:
+                    case KEYSTORE_PASSWORD:
+                            configurator.setupKeyStore(options.get(Options.KEYSTORE), options.get(Options.KEYSTORE_PASSWORD));
+                        break;
+                    case TRUSTSTORE:
+                    case TRUSTSTORE_PASSWORD:
+                        //TODO: TRUSTSTORE_PASSWORD may not be needed.  Also trust store may need to be set up with keystore.
+                        configurator.setupTrustStore(options.get(Options.TRUSTSTORE), options.get(Options.TRUSTSTORE_PASSWORD));
                         break;
                     case PROXY_HOST:
                     case PROXY_PORT:

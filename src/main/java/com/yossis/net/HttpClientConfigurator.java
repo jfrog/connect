@@ -11,17 +11,17 @@ import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.conn.routing.HttpRoute;
 import org.apache.http.conn.routing.RouteInfo;
+import org.apache.http.conn.socket.LayeredConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLSocketFactory;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.*;
 import org.apache.http.impl.conn.DefaultRoutePlanner;
 import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.Arrays;
 import java.util.List;
 
@@ -33,7 +33,6 @@ public class HttpClientConfigurator {
     private RequestConfig.Builder config = RequestConfig.custom();
     private String host;
     private BasicCredentialsProvider credsProvider;
-
     public HttpClientConfigurator() {
         builder.setUserAgent("Artifactory/3.0-test.connect-1");
         credsProvider = new BasicCredentialsProvider();
@@ -48,6 +47,19 @@ public class HttpClientConfigurator {
         return builder.setDefaultRequestConfig(config.build()).build();
     }
 
+    public HttpClientConfigurator setupKeyStore(String keyStorePath, String keyStorePassword )
+    {
+    //    SSLContext mySSLctx= new SSLContext();
+    //    LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory();
+        //TODO: Figure out how to build an SSL socket factory with the trust store
+        return this;
+    }
+
+    public HttpClientConfigurator setupTrustStore(String trustStorePath, String trustStorePassword )
+    {
+        //TODO: can this be done separately from the keystore?  Is the password needed?
+        return this;
+    }
     /**
      * May throw a runtime exception when the given URL is invalid.
      */
