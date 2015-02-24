@@ -85,12 +85,13 @@ public class connect {
                         break;
                     case KEYSTORE:
                     case KEYSTORE_PASSWORD:
-                            configurator.setupKeyStore(options.get(Options.KEYSTORE), options.get(Options.KEYSTORE_PASSWORD));
-                        break;
                     case TRUSTSTORE:
                     case TRUSTSTORE_PASSWORD:
-                        //TODO: TRUSTSTORE_PASSWORD may not be needed.  Also trust store may need to be set up with keystore.
-                        configurator.setupTrustStore(options.get(Options.TRUSTSTORE), options.get(Options.TRUSTSTORE_PASSWORD));
+                        configurator.setupKeyStore(options.get(Options.KEYSTORE), options.get(Options.KEYSTORE_PASSWORD));
+                        if(options.get(Options.TRUSTSTORE)==null)
+                            System.out.println("No trust store configured");
+                        else
+                            configurator.setupTrustStore(options.get(Options.TRUSTSTORE), options.get(Options.TRUSTSTORE_PASSWORD));;
                         break;
                     case PROXY_HOST:
                     case PROXY_PORT:

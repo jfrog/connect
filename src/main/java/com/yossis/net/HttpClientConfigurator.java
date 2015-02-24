@@ -20,8 +20,11 @@ import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 
 import javax.net.ssl.SSLContext;
-import java.io.IOException;
+import java.io.*;
 import java.net.*;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.UnrecoverableKeyException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -33,6 +36,7 @@ public class HttpClientConfigurator {
     private RequestConfig.Builder config = RequestConfig.custom();
     private String host;
     private BasicCredentialsProvider credsProvider;
+    protected String DEFAULT_STORE_TYPE="JKS";
     public HttpClientConfigurator() {
         builder.setUserAgent("Artifactory/3.0-test.connect-1");
         credsProvider = new BasicCredentialsProvider();
@@ -50,16 +54,112 @@ public class HttpClientConfigurator {
     public HttpClientConfigurator setupKeyStore(String keyStorePath, String keyStorePassword )
     {
     //    SSLContext mySSLctx= new SSLContext();
-    //    LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory();
+       // KeyStore keyStore = KeyStore.Builder.
+       //LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory();
         //TODO: Figure out how to build an SSL socket factory with the trust store
         return this;
     }
 
-    public HttpClientConfigurator setupTrustStore(String trustStorePath, String trustStorePassword )
+
+    public HttpClientConfigurator setupTrustStore(String trustStorePath, String trustStorePassword)
     {
-        //TODO: can this be done separately from the keystore?  Is the password needed?
+        try {
+            //for the trust store, probably no need to support anything other than JKS.
+            getTrustStore(trustStorePath, trustStorePassword, null);
+        } catch (IOException ioe) {
+            Log.error("setupTrustStore error: ", ioe);
+        }
         return this;
     }
+
+    protected KeyStore getTrustStore(String trustStorePath, String trustStorePassword, String trustStoreType) throws IOException {
+        //TODO: Not sure if the final code in artifactory should support the calls to the system properties or not.  Certainly allows for a faster short-term fix.
+        KeyStore trustStore = null;
+
+        if(trustStorePath == null) {
+            trustStorePath = System.getProperty("javax.net.ssl.trustStore");
+        }
+        Log.debug("Truststore = " + trustStorePath);
+
+        if( trustStorePassword == null) {
+            trustStorePassword =
+                    System.getProperty("javax.net.ssl.trustStorePassword");
+        }
+        Log.debug("TrustPass = " + trustStorePassword);
+
+        if( trustStoreType == null) {
+            trustStoreType = System.getProperty("javax.net.ssl.trustStoreType");
+        }
+        if(trustStoreType == null) {
+            trustStoreType = DEFAULT_STORE_TYPE;
+        }
+        Log.debug("trustType = " + trustStoreType);
+
+        if (trustStorePath != null){
+            try {
+                trustStore = getStore(trustStoreType, trustStorePath, trustStorePassword);
+            } catch (IOException ioe) {
+                Throwable cause = ioe.getCause();
+                if (cause instanceof UnrecoverableKeyException) {
+                    // Log a warning we had a password issue
+                    Log.warn("Trust Store Provider had trouble reading the store because of a password issue:"+ "cause");
+                    // Re-try
+                    trustStore = getStore(trustStoreType, trustStorePath, null);
+                } else {
+                    // Something else went wrong - re-throw
+                    throw ioe;
+                }
+            }
+        }
+
+        return trustStore;
+    }
+
+    /*
+  * Gets the key- or truststore with the specified type, path, and password.
+  */
+    private KeyStore getStore(String type, String path,
+                              String pass) throws IOException {
+
+        KeyStore ks = null;
+        InputStream istream = null;
+        try {
+            ks = KeyStore.getInstance(type);
+        if(!("PKCS11".equalsIgnoreCase(type) ||
+                    "".equalsIgnoreCase(path))) {
+                File keyStoreFile = new File(path);
+                istream = new FileInputStream(keyStoreFile);
+            }
+
+            char[] storePass = null;
+            if (pass != null && !"".equals(pass)) {
+                storePass = pass.toCharArray();
+            }
+            ks.load(istream, storePass);
+        } catch (FileNotFoundException fnfe) {
+            Log.error("Read store failed: "+fnfe.getMessage(), fnfe);
+            throw fnfe;
+        } catch (IOException ioe) {
+            // May be expected when working with a trust store
+            // Re-throw. Caller will catch and log as required
+            throw ioe;
+        } catch(Exception ex) {
+            String msg = "Get Store failed: "+type+path+" ;; " + ex.getMessage();
+            Log.error(msg, ex);
+            throw new IOException(msg);
+        }
+    finally {
+            if (istream != null) {
+                try {
+                    istream.close();
+                } catch (IOException ioe) {
+                    // Do nothing
+                }
+            }
+        }
+        return ks;
+    }
+
     /**
      * May throw a runtime exception when the given URL is invalid.
      */
