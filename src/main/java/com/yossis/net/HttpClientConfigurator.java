@@ -19,7 +19,6 @@ import org.apache.http.impl.conn.DefaultRoutePlanner;
 import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 
-import javax.net.ssl.SSLContext;
 import java.io.*;
 import java.net.*;
 import java.security.*;
@@ -28,11 +27,14 @@ import java.util.List;
 
 /**
  * Created by freds on 9/19/14.
+ * Markg added SSL key management (to support client authentication) Mar/24/15 loosely based on SSL implementation in:
+ * https://github.com/apache/tomcat/blob/TOMCAT_7_0_42/java/org/apache/tomcat/util/net/jsse/JSSESocketFactory.java
  */
 public class HttpClientConfigurator {
     private HttpClientBuilder builder = HttpClients.custom();
     private RequestConfig.Builder config = RequestConfig.custom();
     private String host;
+    private String keystorepassword;
     private BasicCredentialsProvider credsProvider;
     protected String DEFAULT_STORE_TYPE="JKS";
     public HttpClientConfigurator() {
@@ -49,25 +51,42 @@ public class HttpClientConfigurator {
         return builder.setDefaultRequestConfig(config.build()).build();
     }
 
-    public HttpClientConfigurator setupKeyStore(String keyStorePath, String keyStorePassword )
+    public HttpClientConfigurator setupStores(String keyStorePath, String keyStorePassword, String keyStoreType, String keyPassword, String trustStorePath, String trustStorePassword)
     {
-        //SSLContext mySSLctx= new SSLContext();
-        //KeyStore keyStore = KeyStore.Builder.
-        //LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory();
-        //TODO: Figure out how to build an SSL socket factory with the trust store
-        return this;
-    }
-
-
-    public HttpClientConfigurator setupTrustStore(String trustStorePath, String trustStorePassword)
-    {
+        KeyStore trustStore = null;
+              try {
+                //for the trust store, probably no need to support anything other than JKS.
+                trustStore = getTrustStore(trustStorePath, trustStorePassword, null);
+            } catch (IOException ioe) {
+                Log.error("setupTrustStore error: ", ioe);
+            }
+        KeyStore keyStore = null;
         try {
-            //for the trust store, probably no need to support anything other than JKS.
-            KeyStore trustStore = getTrustStore(trustStorePath, trustStorePassword, null);
-            LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory(trustStore);
-            builder.setSSLSocketFactory(mySSLSocketFact);
+            keystorepassword = keyStorePassword; //This global variable allows me to revise the keystore password during getKeyStore, such as via JVM properties
+            //for the key store, we want to be able to support PKCS12 keys
+            keyStore = getKeyStore(keyStorePath, keyStorePassword, keyStoreType);
         } catch (IOException ioe) {
-            Log.error("setupTrustStore error: ", ioe);
+            Log.error("setupKeyStore error: ", ioe);
+        }
+        try {
+            LayeredConnectionSocketFactory mySSLSocketFact = null;
+            if (keyStore == null && trustStore != null) {
+                //for the trust store, probably no need to support anything other than JKS.
+                mySSLSocketFact = new SSLSocketFactory(trustStore);
+            } else if (trustStore == null && keyStore != null) {
+                if (keyPassword == null) {
+                    keyPassword = keystorepassword;
+                }
+                mySSLSocketFact = new SSLSocketFactory(keyStore, keyPassword);
+            } else if (trustStore != null && keyStore != null) {
+                if (keyPassword == null) {
+                    keyPassword = keystorepassword;
+                }
+                mySSLSocketFact = new SSLSocketFactory(keyStore, keyPassword, trustStore);
+            } else {
+                throw new IOException("Couldn't create a keystore, even with defaults");
+            }
+            builder.setSSLSocketFactory(mySSLSocketFact);
         } catch (NoSuchAlgorithmException nsae)
         {
             Log.error("setupTrustStore error: No Such Algorithm Exception: ", nsae);
@@ -79,11 +98,56 @@ public class HttpClientConfigurator {
             Log.error("setupTrustStore error: Key Store Exception: ", kse);
         } catch (UnrecoverableKeyException urke)
         {
-            Log.error("setupTrustStore error: Key Store Exception: ", urke);
+            Log.error("setupTrustStore error: Unrecoverable Key Exception (usually a password problem): ", urke);
+        } catch (IOException ioe)
+        {
+            Log.warn("Arguments received for keystores but none were able to be created, even with defaults");
         }
         return this;
     }
+    
+    protected KeyStore getKeyStore(String keyStorePath, String keyStorePassword,
+                                     String keyStoreType) throws IOException {
+        //TODO: Long-term, using the JVM properties for the outbound keystore is probably not what we want to do.  I provide in case we want to use this to hack it in.  Ideally we would present individual keys out of the store, not an entire store, although a PKCS12 key file looks like a keystore to java
+        KeyStore keyStore = null;
 
+        if(keyStorePath == null) {
+            keyStorePath = System.getProperty("javax.net.ssl.keyStore");
+        }
+        Log.debug("keystore = " + keyStorePath);
+
+        if( keyStorePassword == null) {
+            keyStorePassword =
+                    System.getProperty("javax.net.ssl.keyStorePassword");
+        }
+        Log.debug("keyPass = " + keyStorePassword);
+        keystorepassword = keyStorePassword; //this is a bit of a hack to allow either the system properties for the JVM or the CLI arguments
+        if( keyStoreType == null) {
+            keyStoreType = System.getProperty("javax.net.ssl.keyStoreType");
+        }
+        if(keyStoreType == null) {
+            keyStoreType = DEFAULT_STORE_TYPE;
+        }
+        Log.debug("keyType = " + keyStoreType);
+
+        if (keyStorePath != null){
+            try {
+                keyStore = getStore(keyStoreType, keyStorePath, keyStorePassword);
+            } catch (IOException ioe) {
+                Throwable cause = ioe.getCause();
+                if (cause instanceof UnrecoverableKeyException) {
+                    // Log a warning we had a password issue
+                    Log.warn("key Store Provider had trouble reading the store because of a password issue:"+ "cause");
+                    // Re-try
+                    keyStore = getStore(keyStoreType, keyStorePath, null);
+                } else {
+                    throw ioe;
+                }
+            }
+        }
+        return keyStore;
+    }
+    
     protected KeyStore getTrustStore(String trustStorePath, String trustStorePassword,
                                      String trustStoreType) throws IOException {
         //TODO: Not sure if the final code in artifactory should support the calls to the system properties or not.  Certainly allows for a faster short-term fix.
@@ -123,7 +187,6 @@ public class HttpClientConfigurator {
                 }
             }
         }
-
         return trustStore;
     }
 

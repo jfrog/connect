@@ -15,7 +15,8 @@ public class connect {
     enum Options { PROXY_HOST, PROXY_PORT, PROXY_USERNAME,
         PROXY_PASSWORD, REMOTE_USERNAME,
         REMOTE_PASSWORD, USE_HTTP_CLIENT(true),
-        CONNECT_TIMEOUT, TRUSTSTORE, KEYSTORE, TRUSTSTORE_PASSWORD, KEYSTORE_PASSWORD;
+        CONNECT_TIMEOUT, TRUSTSTORE, KEYSTORE, TRUSTSTORE_PASSWORD, KEYSTORE_PASSWORD, KEY_PASSWORD, KEYSTORE_TYPE,
+        USE_SSL_SETUP(true);
 
         boolean hasValue;
         String flagName;
@@ -84,14 +85,18 @@ public class connect {
                         }
                         break;
                     case KEYSTORE:
-                    case KEYSTORE_PASSWORD:
                     case TRUSTSTORE:
+                    case USE_SSL_SETUP: //this option exists so one can force SSL even if using purely JVM options
+                        configurator.setupStores(options.get(Options.KEYSTORE), options.get(Options.KEYSTORE_PASSWORD), options.get(Options.KEYSTORE_TYPE), options.get(Options.KEY_PASSWORD), options.get(Options.TRUSTSTORE), options.get(Options.TRUSTSTORE_PASSWORD));
+                        break;
+                    case KEYSTORE_PASSWORD:
+                    case KEY_PASSWORD:
+                        if(options.get(Options.KEYSTORE) == null)
+                            System.out.println("--keystore-password and --key-password are only valid arguments in combination with --keystore");
+                        break;
                     case TRUSTSTORE_PASSWORD:
-                        configurator.setupKeyStore(options.get(Options.KEYSTORE), options.get(Options.KEYSTORE_PASSWORD));
-                        if(options.get(Options.TRUSTSTORE)==null)
-                            System.out.println("No trust store configured");
-                        else
-                            configurator.setupTrustStore(options.get(Options.TRUSTSTORE), options.get(Options.TRUSTSTORE_PASSWORD));;
+                        if(options.get(Options.TRUSTSTORE) == null)
+                            System.out.println("--truststore-password is only a valid argument in combination with --truststore");
                         break;
                     case PROXY_HOST:
                     case PROXY_PORT:
