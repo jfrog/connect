@@ -22,9 +22,7 @@ import org.apache.http.protocol.HttpContext;
 import javax.net.ssl.SSLContext;
 import java.io.*;
 import java.net.*;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.UnrecoverableKeyException;
+import java.security.*;
 import java.util.Arrays;
 import java.util.List;
 
@@ -53,9 +51,9 @@ public class HttpClientConfigurator {
 
     public HttpClientConfigurator setupKeyStore(String keyStorePath, String keyStorePassword )
     {
-    //    SSLContext mySSLctx= new SSLContext();
-       // KeyStore keyStore = KeyStore.Builder.
-       //LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory();
+        //SSLContext mySSLctx= new SSLContext();
+        //KeyStore keyStore = KeyStore.Builder.
+        //LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory();
         //TODO: Figure out how to build an SSL socket factory with the trust store
         return this;
     }
@@ -65,14 +63,29 @@ public class HttpClientConfigurator {
     {
         try {
             //for the trust store, probably no need to support anything other than JKS.
-            getTrustStore(trustStorePath, trustStorePassword, null);
+            KeyStore trustStore = getTrustStore(trustStorePath, trustStorePassword, null);
+            LayeredConnectionSocketFactory mySSLSocketFact = new SSLSocketFactory(trustStore);
+            builder.setSSLSocketFactory(mySSLSocketFact);
         } catch (IOException ioe) {
             Log.error("setupTrustStore error: ", ioe);
+        } catch (NoSuchAlgorithmException nsae)
+        {
+            Log.error("setupTrustStore error: No Such Algorithm Exception: ", nsae);
+        } catch (KeyManagementException kme)
+        {
+            Log.error("setupTrustStore error: Key Management Exception: ", kme);
+        } catch (KeyStoreException kse)
+        {
+            Log.error("setupTrustStore error: Key Store Exception: ", kse);
+        } catch (UnrecoverableKeyException urke)
+        {
+            Log.error("setupTrustStore error: Key Store Exception: ", urke);
         }
         return this;
     }
 
-    protected KeyStore getTrustStore(String trustStorePath, String trustStorePassword, String trustStoreType) throws IOException {
+    protected KeyStore getTrustStore(String trustStorePath, String trustStorePassword,
+                                     String trustStoreType) throws IOException {
         //TODO: Not sure if the final code in artifactory should support the calls to the system properties or not.  Certainly allows for a faster short-term fix.
         KeyStore trustStore = null;
 
@@ -106,7 +119,6 @@ public class HttpClientConfigurator {
                     // Re-try
                     trustStore = getStore(trustStoreType, trustStorePath, null);
                 } else {
-                    // Something else went wrong - re-throw
                     throw ioe;
                 }
             }
@@ -115,7 +127,7 @@ public class HttpClientConfigurator {
         return trustStore;
     }
 
-    /*
+ /*
   * Gets the key- or truststore with the specified type, path, and password.
   */
     private KeyStore getStore(String type, String path,
@@ -148,7 +160,7 @@ public class HttpClientConfigurator {
             Log.error(msg, ex);
             throw new IOException(msg);
         }
-    finally {
+        finally {
             if (istream != null) {
                 try {
                     istream.close();
